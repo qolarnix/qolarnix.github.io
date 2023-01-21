@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> 
+
+        <link rel="canonical" href="/darwin">
+        <meta name="description" content="some interesting stuff">
+        
+        <title>polarnix</title>
+        <link rel="stylesheet" href="/assets/build/css/main.css?id=09e72067d6a7181ce6e21b439912af23">
+        
+    </head>
+    <body class="bg-slate-800 font-sans antialiased">
+        <main class="flex flex-wrap items-center content-center justify-center max-w-[700px] my-0 mx-auto pt-24 px-8">
+    <section class="w-full">
+      <a href="/">Back</a>
+      <h1 class="mt-4">Installing & updating Darwin 8.0.1 with QEMU</h1>
+    </section>
+
+    <section class="w-full">
+      <p>The purpose of this article is to preserve information that I dug up while researching older versions of DarwinBSD. The following is a combination of others articles & tips/tricks which all have been referenced at the end.</p>
+
+      <p>These instructions have been tested on arch & debian based linux distributions. If you are trying to follow along on macos, modifications may be needed.</p>
+    </section>
+
+    <section class="w-full border-t pt-6 border-slate-700">
+      <h3>Getting the ISO</h3>
+      <p>The best way to get the ISO is directly from Apple. In the case that Apple decides to remove this ISO at some point, I may provide a mirror. <a href="https://www.opensource.apple.com/static/iso/darwinx86-801.iso.gz" target="_block" class="lnk-external">Download - apple.com</a></p>
+
+      <p>Once the download has completed, I like to make a dedicated folder where I will keep the ISO, all my QEMU files, and everything I will need to update the system.</p>
+
+      <pre><code><span class="text-slate-700 select-none">$ </span>mkdir darwin && cd darwin<br><span class="text-slate-700 select-none">$ </span>mv darwinx86-801.iso.gz /path/to/darwin/darwinx86-801.iso.gz</code></pre>
+
+      <p>Use gzip to unzip the Darwin ISO</p>
+
+      <pre><code><span class="text-slate-700 select-none">$ </span>gzip -d darwinx86-801.iso.gz</code></pre>
+    </section>
+
+    <section class="w-full border-t pt-6 border-slate-700">
+      <h3>Setting up QEMU</h3>
+
+      <p>Inside the darwin folder that you just created, type the following command:</p>
+
+      <pre><code><span class="text-slate-700 select-none">$ </span>qemu-img create -f qcow2 darwin.qcow2 10G</code></pre>
+
+      <p>The next step is optional but extremely useful, we will create a simple script to start the VM. This script will be edited multiple times as we change the QEMU flags.</p>
+
+      <pre><code><span class="text-slate-700 select-none">$ </span>vim boot.sh</code></pre>
+
+      <pre><code>#!/bin/bash<br>qemu-system-x86_64 -net none -drive file=darwin.qcow2,cache=writeback -cdrom darwinx86-801.iso -boot d</code></pre>
+
+      <pre><code><span class="text-slate-700 select-none">$ </span>chmod +x boot.sh<br><span class="text-slate-700 select-none">$ </span>./boot.sh</code></pre>
+
+      <p>Darwin should now open in QEMU and boot.</p>
+    </section>
+
+    <section class="w-full border-t pt-6 border-slate-700">
+      <h3>Installing Darwin</h3>
+      <p>The installation process might seem weird at first, but it works. I will break this down into the first boot & second boot. You will select different options on the install script for the second boot.</p>
+
+      <p class="font-bold">First Boot</p>
+
+      <ul>
+        <li>Select the virtual disk we created earlier</li>
+        <li>Select "2" (manual partitioning)</li>
+        <li>Select "y" (initialize MBR)</li>
+        <li>Now you will enter the following commands in fdisk:</li>
+      </ul>
+
+      <pre><code><span class="text-slate-700 select-none">&gt; </span>auto hfs</code></pre>
+      <p>Ignore the warning</p>
+      <pre><code><span class="text-slate-700 select-none">&gt; </span>update<br><span class="text-slate-700 select-none">&gt; </span>write<br><span class="text-slate-700 select-none">&gt; </span>quit</code></pre>
+
+      <ul>
+        <li>Enter parition name (starts with /dev/)</li>
+        <li>Select "yes" (clean install)</li>
+        <li>Type "darwin" for the volume name</li>
+        <li>Continue (reboot)</li>
+      </ul>
+
+      <p class="font-bold">Second Boot (make sure you boot from the CD/ISO again)</p>
+
+      <div class="note">
+        <span>Note:</span>
+        <p>The root user will be created here, after installation I will explain how to add a new user in Darwin.</p>
+      </div>
+
+      <ul>
+        <li>Select the virtual disk again</li>
+        <li>Select "3" (existing partition)</li>
+        <li>Enter partition name (starts with /dev/)</li>
+        <li>Select "hfs" (HFS+ filesystem)</li>
+        <li>Select "yes" (clean install)</li>
+        <li>Enter a volume name, I used "darwin"</li>
+        <li>Wait for installation to complete, this should only take a few minutes.</li>
+        <li>Enter a root password</li>
+        <li>Enter a hostname, I used "darwin"</li>
+        <li>Select "3" (spawn shell), then type the following in the shell: </li>
+      </ul>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>halt</code></pre>
+
+      <p>The "halt" command will shut down the VM. Now we have to edit our QEMU flags before booting again.</p>
+
+      <pre><code><span class="text-slate-700 select-none">$ </span>vim boot.sh</code></pre>
+      <pre><code>#!/bin/bash<br>qemu-system-x86_64 -net none -drive file=darwin.qcow2,cache=writeback</code></pre>
+
+      <p>Boot the system again with your script and you should be greeted by a login screen. Username will be root and the password you chose earlier during install.</p>
+    </section>
+
+    <section class="w-full border-t pt-6 border-slate-700">
+      <h3>Creating a new user in Darwin</h3>
+
+      <p>Darwin does not include <code>adduser</code> but it may be possible to install as a script. Here I will focus on the default way to add users without installing anything.</p>
+
+      <p class="font-bold">Creating a user</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>niutil -create / /users/polarnix</code></pre>
+
+      <p class="font-bold">Set the user shell</p>
+      <p>You can likely use /bin/zsh here, but I have not tested it.</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>niutil -createprop / /users/polarnix shell /bin/bash</code></pre>
+
+      <p class="font-bold">Set the "Real Name" of the user</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>niutil -createprop / /users/polarnix realname "Polarnix"</code></pre>
+
+      <p class="font-bold">Set the uid/gid of the user</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>niutil -createprop / /users/polarnix uid 1000<br><span class="text-slate-700 select-none"># </span>niutil -createprop / /users/polarnix gid 1000</code></pre>
+
+      <div class="note">
+        <span>Note:</span>
+        <p>MacOS typically allows users to have a uid and gid from 500 and upwards. uids and gids between 0-499 are reserved for the system.</p>
+      </div>
+
+      <p class="font-bold">Set the home directory for the user</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>niutil -createprop / /users/polarnix home /Users/polarnix<br><span class="text-slate-700 select-none"># </span>mkdir -p /Users/polarnix</code></pre>
+
+      <p class="font-bold">Set the user password</p>
+      <p>This creates an entry in the directory for the password, but does not set it</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>niutil -createprop / /users/polarnix _shadow_password</code></pre>
+      <p>and then set the user's password</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>passwd polarnix</code></pre>
+
+      <p class="font-bold">Add the user to the wheel group</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>niutil -appendprop / /groups/wheel users polarnix</code></pre>
+    </section>
+
+    <section class="w-full border-t pt-6 border-slate-700">
+      <h3>Configure networking & SSH</h3>
+
+      <p>We will edit the boot script to allow for VM networking and SSH access. You can shut down the VM with the following command:</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>shutdown -h now</code></pre>
+
+      <p>On the host computer:</p>
+      <pre><code><span class="text-slate-700 select-none">$ </span>vim boot.sh</code></pre>
+
+      <pre><code>#!/bin/bash<br>qemu-system-x86_64 -net nic,model=rtl8139 -net user,hostfwd=tcp:127.0.0.1:10023-:22 -drive file=darwin.qcow2,cache=writeback</code></pre>
+
+      <p>Boot the VM again with your script, login and enable SSH as root:</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>service ssh start</code></pre>
+
+      <p>On your host machine you will need to edit your SSH config to connect</p>
+
+      <pre><code><span class="text-slate-700 select-none">$ </span>sudo vim /etc/ssh/ssh_config</code></pre>
+      <p>Add the following to the bottom of the file:</p>
+      <pre><code># Legacy Changes<br>KexAlgorithms +diffie-hellman-group1-sha1</code></pre>
+
+      <p>Now you should be able to connect using the following command:</p>
+      <pre><code><span class="text-slate-700 select-none">$ </span>ssh -oHostKeyAlgorithms=+ssh-dss -p 10023 root@localhost</code></pre>
+    </section>
+
+    <section class="w-full border-t pt-6 border-slate-700">
+      <h3>Set the timezone</h3>
+      <p>You can change the timezone on Darwin with the following command:</p>
+      
+      <pre><code><span class="text-slate-700 select-none"># </span>ln -sf /usr/share/zoneinfo/UTC /etc/localtime</code></pre>
+    </section>
+
+    <section class="w-full border-t pt-6 border-slate-700">
+      <h3>Getting ready for updates - Temporary filesystem</h3>
+      <p>You may want to use a temporary filesystem for building software. This helps keeps things organized and keep the main disk image file smaller.</p>
+      <p>On your host machine:</p>
+
+      <pre><code><span class="text-slate-700 select-none">$ </span>qemu-img create -f qcow2 scratch.qcow2 10G</code></pre>
+
+      <p>Edit your boot script once again to include the new disk we just created:</p>
+
+      <pre><code><span class="text-slate-700 select-none">$ </span>vim boot.sh<br>#!/bin/bash<br>qemu-system-x86_64 -net nic,model=rtl8139 -net user,hostfwd=tcp:127.0.0.1:10023-:22 -drive file=darwin.qcow2,cache=writeback -drive file=scratch.qcow2,cache=writeback<br><span class="text-slate-700 select-none">$ </span>./boot.sh</code></pre>
+
+      <p class="font-bold">Mount the disk we just created</p>
+      <p>Check which disks are already mounted</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>mount</code></pre>
+
+      <p>List all disks</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>ls /dev/rdisk*</code></pre>
+
+      <p>We are looking for the disk that isn't mounted and doesn't have any partitions. It is usually /dev/rdisk1 or /dev/rdisk0</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>newfs_hfs -v scratch /dev/rdisk1<br><span class="text-slate-700 select-none"># </span>reboot</code></pre>
+
+      <p>The disk should be available at /Volumes/scratch on next boot.</p>
+
+      <div class="note">
+        <span>Note:</span>
+        <p>The VM can sometimes fail to boot with "panic(...): nfs_boot_init failed"; If this happens, restart it.</p>
+      </div>
+    </section>
+
+    <section class="w-full border-t pt-6 border-slate-700">
+      <h3>Updating the system</h3>
+
+      <div class="note">
+        <span>Note:</span>
+        <p>It can take up to 6 hours to complete all updates. I have attempted to compile on Darwin with multiple different QEMU flags to help increase performance and most end up with the system crashing during compile time.</p>
+      </div>
+
+      <p class="font-bold">Transferring files with SCP</p>
+      <p>The best way to transfer files to the scratch volume is with SCP. Below is an example of the SCP command for Darwin</p>
+
+      <pre><code><span class="text-slate-700 select-none">$ </span>scp -P 10023 -oHostKeyAlgorithms=+ssh-dss example-file.tar.gz root@localhost:/Volumes/scratch/example-file.tar.gz</code></pre>
+    </section>
+
+    <section class="w-full">
+      <h3>Updating the kernel (XNU)</h3>
+      <p>Download the source package: <a href="http://www.opensource.apple.com/tarballs/xnu/xnu-792.6.76.tar.gz" target="_block" class="lnk-external">xnu-792.6.76.tar.gz — apple.com</a></p>
+
+      <p>SCP the archive into <code>/Volumes/scratch</code>, and then build:</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>cd /Volumes/scratch<br><span class="text-slate-700 select-none"># </span>tar xzf xnu-792.6.76.tar.gz<br><span class="text-slate-700 select-none"># </span>cd xnu-792.6.76</code></pre>
+
+      <p>Patch to help build a new version of GCC later on:</p>
+      <pre><code><span class="text-slate-700 select-none"># </span>sed -i.tmp 's/defined *(__i386__)/& || defined(__x86_64__)/' bsd/{machine,sys}/*.h</code></pre>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>make DSTROOT= install</code></pre>
+
+      <p>Once the build is finished, reboot. <code>uname -r</code> is now 8.7.0</p>
+    </section>
+
+    <section class="w-full">
+      <h3>Updating standard library (Libc)</h3>
+      <div class="note">
+        <span>Note:</span>
+        <p>Requires XNU to be updated.</p>
+      </div>
+      <p>Download the source package: <a href="http://opensource.apple.com/tarballs/Libc/Libc-391.2.10.tar.gz" target="_block" class="lnk-external">Libc-391.2.10.tar.gz — apple.com</a></p>
+
+      <p>SCP the archive into <code>/Volumes/scratch</code>, and then build:</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>cd /Volumes/scratch<br><span class="text-slate-700 select-none"># </span>tar xzf Libc-391.2.10.tar.gz<br><span class="text-slate-700 select-none"># </span>cd Libc-391.2.10<br><span class="text-slate-700 select-none"># </span>sed -i.tmp s/NOTIFY_STATUS_OK/0/g gen/{asl.c,syslog.c}</code></pre>
+
+      <p>Another patch to help build GCC:</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>sed -i.tmp 's/defined *(__i386__)/& || defined(__x86_64__)/' include/machine/*.h<br><span class="text-slate-700 select-none"># </span>make OBJROOT="$PWD"/obj install</code></pre>
+    </section>
+
+    <section class="w-full">
+      <h3>Updating dynamic linker (dyld)</h3>
+      <div class="note">
+        <span>Note:</span>
+        <p>This update is optional but doesn't take very long</p>
+      </div>
+      <p>Download the source package: <a href="http://www.opensource.apple.com/tarballs/dyld/dyld-46.16.tar.gz" target="_block" class="lnk-external">dyld-46.16.tar.gz — apple.com</a></p>
+
+      <p>Darwin doesn't include Xcode, which is required to build this package. The following makefile provides alternative build instructions. If this link breaks, I will provide a mirror. <a href="https://rawgit.com/zholos/darwin/master/dyld.mk" target="_block" class="lnk-external">dyld.mk - rawgit.com</a></p>
+
+      <p>SCP both files into /Volumes/scratch, and then build:</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>cd /Volumes/scratch<br><span class="text-slate-700 select-none"># </span>tar xzf dyld-46.16.tar.gz<br><span class="text-slate-700 select-none"># </span>mv dyld.mk dyld-46.16/dyld.mk<br><span class="text-slate-700 select-none"># </span>cd dyld-46.16<br><span class="text-slate-700 select-none"># </span>sed -i.tmp '/case CPU_TYPE_X86_64:/,/break;/d;/__pthread_tsd_first/d' src/dyld.cpp<br><span class="text-slate-700 select-none"># </span>ln -s libstdc++.a /usr/lib/gcc/i686-apple-darwin8/4.0.0/libstdc++-static.a<br><span class="text-slate-700 select-none"># </span>bsdmake -f dyld.mk VERSION_DYLD=46 install</code></pre>
+    </section>
+
+    <section class="w-full">
+      <h3>Updating CCTools</h3>
+      <p>Download the source package: <a href="http://opensource.apple.com/tarballs/cctools/cctools-667.3.tar.gz" target="_block" class="lnk-external">cctools-667.3.tar.gz — apple.com</a></p>
+
+      <p>SCP the archive into <code>/Volumes/scratch</code>, and then build:</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>cd /Volumes/scratch<br><span class="text-slate-700 select-none"># </span>tar xzf cctools-667.3.tar.gz<br><span class="text-slate-700 select-none"># </span>cd cctools-667.3<br><span class="text-slate-700 select-none"># </span>sed -i.tmp '/install.*strip/{h;s/strip/seg_hack/gp;g;s/ -s / /;}' misc/Makefile<br><span class="text-slate-700 select-none"># </span>sed -i.tmp s/ld_classic/ld/ ld/Makefile<br><span class="text-slate-700 select-none"># </span>make install<br></code></pre>
+    </section>
+
+    <section class="w-full">
+      <h3>Updating GCC</h3>
+
+      <div class="note">
+        <span>Note:</span>
+        <p>We can update to either gcc_42-5577 or gcc_42-5531. In this post I will add instructions for the latest which requires patches we already performed above. For instructions on the older version see references below.</p>
+      </div>
+
+      <div class="note">
+        <p>GCC takes between 3-4 hours to build. You might want to run this in the background while working on other projects.</p>
+      </div>
+
+      <p>Download the source package: <a href="http://opensource.apple.com/tarballs/gcc_42/gcc_42-5577.tar.gz" target="_block" class="lnk-external">gcc_42-5577.tar.gz — apple.com</a></p>
+
+      <p>SCP the archive into <code>/Volumes/scratch</code>, and then build:</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>cd /Volumes/scratch<br><span class="text-slate-700 select-none"># </span>tar xzf gcc_42-5577.tar.gz<br><span class="text-slate-700 select-none"># </span>cd gcc_42-5577<br></code></pre>
+
+      <p>If you skipped the dyld upgrade, patch to revert debugging format from DWARF to stabs:</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>sed -i.tmp 's/\(#define PREFERRED_DEBUGGING_TYPE \).*/\1DBX_DEBUG/' gcc/config/darwin.h<br><span class="text-slate-700 select-none"># </span>sed -i.tmp '/darwin_macho_att_stub/s/Init.*//' gcc/config/darwin.opt<br></code></pre>
+
+      <p>Continue:</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>sed -i.tmp '/x86_64/s/|| exit 1//' build_gcc<br><span class="text-slate-700 select-none"># </span>ln -s true /usr/bin/dsymutil<br><span class="text-slate-700 select-none"># </span>gnumake RC_ARCHS=i386 install<br></code></pre>
+
+      <div class="note">
+        <span>Note:</span>
+        <p>Don't try to set <code>DSTROOT=/</code> it deletes everything</p>
+      </div>
+
+      <p>Once the build has finished:</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>cp -pR dst/* /<br><span class="text-slate-700 select-none"># </span>cp -pR obj/dst-i686-i686/usr/lib/libgcc_s* /usr/lib/gcc/i686-apple-darwin8/4.2.1/</code></pre>
+
+      <p>GCC is now installed as gcc-4.2. It can be made default with:</p>
+
+      <pre><code><span class="text-slate-700 select-none"># </span>gcc_select 4.2</code></pre>
+    </section>
+
+    <section class="w-full border-t pt-6 border-slate-700">
+      <p>This is the end of system upgrades. If you can find anything else that would be useful to upgrade, let me know and I can add it to this guide.</p>
+
+      <p>With this updated toolchain it may be possible to build something like XFree86 or anything else that might help you create a more usable system.</p>
+
+      <p>There use to be some guides on how to install pkg and dmg files, but I can no longer find them. In my experience it never works anyways.</p>
+
+      <h3>References</h3>
+
+      <ul>
+        <li>User/group management: <a href="https://docs.huihoo.com/darwin/opendarwin/faq/ch02.html" target="_block" class="lnk-external">OpenDarwin</a></li>
+        <li>QEMU setup & build system upgrades: <a href="http://althenia.net/notes/darwin" target="_block" class="lnk-external">Althenia.net</a></li>
+        <li>Legacy SSH support: <a href="https://unix.stackexchange.com/questions/340844/how-to-enable-diffie-hellman-group1-sha1-key-exchange-on-debian-8-0" target="_block" class="lnk-external">Stephen Kitt on Stack Exchange</a></li>
+        <li>ISO & Package downloads: <a href="https://opensource.apple.com/tarballs/" target="_block" class="lnk-external">Apple source browser</a></li>
+      </ul>
+    </section>
+
+</main>
+        <footer class="py-20">
+            
+        </footer>
+    </body>
+</html>
